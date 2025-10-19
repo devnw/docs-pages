@@ -1,0 +1,157 @@
+name: "doc-pages"
+
+description: |
+  Build a documentation site for Go projects including package reference,
+  coverage reports and optional benchmarks.
+
+author: "CodePros"
+
+branding:
+  icon: "book"
+  color: "blue"
+
+inputs:
+  github_token:
+    description: "GitHub token with contents:write (GITHUB_TOKEN usually)"
+    required: true
+  run_benchmarks:
+    description: "Whether to run benchmarks and update history"
+    required: false
+    default: "true"
+  bench_branch:
+    description: "Branch used to store benchmark history JSON"
+    required: false
+    default: "bench-data"
+  site_name:
+    description: "Site name override"
+    required: false
+    default: ""
+  extra_nav_docs:
+    description: "Include docs/ folder in nav"
+    required: false
+    default: "true"
+  nav_order:
+    description: "Comma-separated nav order keys"
+    required: false
+    default: "home,reference,coverage,bench,docs"
+  embed_coverage_html:
+    description: "If true, embed coverage HTML inside details block"
+    required: false
+    default: "true"
+  fail_on_test_failure:
+    description: "Fail the action if Go tests fail"
+    required: false
+    default: "false"
+  git_credentials:
+    description: "(Optional) Git credentials string passed to setup-git-credentials action"
+    required: false
+    default: ""
+  cachix_auth_token:
+    description: "(Optional) Cachix auth token for cache push"
+    required: false
+    default: ""
+  enable_nix:
+    description: "Enable Nix environment & cache steps (optional)"
+    required: false
+    default: "false"
+  nix_accept_flake_config:
+    description: "Pass --accept-flake-config to nix develop (requires enable_nix=true)"
+    required: false
+    default: "true"
+
+outputs:
+  site_dir:
+    description: "Path to built site directory"
+    value: ${{ steps.generate.outputs.site_dir }}
+  coverage_percent:
+    description: "Overall coverage percentage"
+    value: ${{ steps.generate.outputs.coverage_percent }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - uses: de-vri-es/setup-git-credentials@v2
+      if: ${{ inputs.git_credentials != '' }}
+      with:
+        credentials: ${{ inputs.git_credentials }}
+
+    - name: Install Nix
+      if: ${{ inputs.enable_nix == 'true' }}
+      uses: cachix/install-nix-action@v31
+      with:
+        extra_nix_config: |
+          access-tokens = github.com=${{ inputs.github_token }}
+    - if: ${{ inputs.enable_nix == 'true' }}
+      uses: DeterminateSystems/nix-installer-action@main
+    - if: ${{ inputs.enable_nix == 'true' }}
+      uses: DeterminateSystems/magic-nix-cache-action@main
+      with:
+        upstream-cache: https://spyder.cachix.org
+    - if: ${{ inputs.enable_nix == 'true' }}
+      uses: DeterminateSystems/flake-checker-action@main
+
+    - name: Setup Cachix
+      if: ${{ inputs.enable_nix == 'true' && inputs.cachix_auth_token != '' }}
+      uses: cachix/cachix-action@v16
+      with:
+        name: spyder
+        authToken: ${{ inputs.cachix_auth_token }}
+
+    - name: Enter devShell
+      if: ${{ inputs.enable_nix == 'true' }}
+      uses: nicknovitski/nix-develop@v1
+      continue-on-error: true
+      with:
+        arguments: --impure --accept-flake-config
+
+    - name: Install optional Go tools
+      shell: bash
+      run: |
+        go install github.com/fzipp/gocyclo/cmd/gocyclo@latest || true
+
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.x"
+
+    - name: Install MkDocs tooling
+      shell: bash
+      run: |
+        python -m pip install --upgrade pip
+        pip install mkdocs mkdocs-material
+
+    - name: Install action dependencies
+      shell: bash
+      working-directory: ${{ github.action_path }}
+      run: |
+        set -e
+        if ! npm ci; then
+          echo "::warning::npm ci failed (lock/package.json mismatch). Regenerating package-lock.json." >&2
+          npm install --package-lock-only
+          npm ci
+        fi
+
+    - name: Build action bundle
+      shell: bash
+      working-directory: ${{ github.action_path }}
+      run: npm run build
+
+    - name: Generate site
+      id: generate
+      shell: bash
+      env:
+        # Map action inputs to Node action-style INPUT_* env vars so @actions/core.getInput works
+        INPUT_GITHUB_TOKEN: ${{ inputs.github_token }}
+        INPUT_RUN_BENCHMARKS: ${{ inputs.run_benchmarks }}
+        INPUT_BENCH_BRANCH: ${{ inputs.bench_branch }}
+        INPUT_SITE_NAME: ${{ inputs.site_name }}
+        INPUT_EXTRA_NAV_DOCS: ${{ inputs.extra_nav_docs }}
+        INPUT_NAV_ORDER: ${{ inputs.nav_order }}
+        INPUT_EMBED_COVERAGE_HTML: ${{ inputs.embed_coverage_html }}
+        INPUT_FAIL_ON_TEST_FAILURE: ${{ inputs.fail_on_test_failure }}
+      run: node "${{ github.action_path }}/dist/index.js"

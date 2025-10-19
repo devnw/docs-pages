@@ -1,0 +1,14 @@
+{
+  "severity": {
+    "critical": 1,
+    "high": 1,
+    "medium": 0,
+    "low": 1
+  },
+  "code_scanning": {
+    "open": 2
+  },
+  "secret_scanning": {
+    "open": 1
+  }
+}

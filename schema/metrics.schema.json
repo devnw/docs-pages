@@ -1,0 +1,14 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "MetricsSnapshot",
+  "type": "object",
+  "properties": {
+    "coverage_percent": {"type": "number", "minimum": 0},
+    "test_functions": {"type": "integer", "minimum": 0},
+    "go_files": {"type": "integer", "minimum": 0},
+    "loc": {"type": "integer", "minimum": 0},
+    "avg_cyclomatic_complexity": {"type": "number", "minimum": 0},
+    "high_complexity_functions": {"type": "integer", "minimum": 0}
+  },
+  "additionalProperties": false
+}
