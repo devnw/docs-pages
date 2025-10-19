@@ -61,7 +61,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Generate site
         id: docs
-        uses: codeprosorg/doc-pages@v1
+        uses: devnw/doc-pages@v1
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
       - name: Upload Pages artifact

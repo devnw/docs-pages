@@ -4,7 +4,7 @@ description: |
   Build a documentation site for Go projects including package reference,
   coverage reports and optional benchmarks.
 
-author: "CodePros"
+author: "Developer Network"
 
 branding:
   icon: "book"
